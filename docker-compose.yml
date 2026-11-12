@@ -1,0 +1,52 @@
+services:
+  api:
+    build:
+      context: ./backend
+    env_file: .env
+    volumes:
+      - ./certs:/certs:ro
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
+  publisher:
+    build:
+      context: ./backend
+    env_file: .env
+    volumes:
+      - ./certs:/certs:ro
+    restart: unless-stopped
+    command: python -m app.workers.publisher
+    depends_on:
+      api:
+        condition: service_healthy
+
+  consumer:
+    build:
+      context: ./backend
+    env_file: .env
+    volumes:
+      - ./certs:/certs:ro
+    restart: unless-stopped
+    command: python -m app.workers.consumer
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
